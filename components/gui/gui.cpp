@@ -2,13 +2,24 @@
 #include <waveshare__esp32_p4_wifi6_touch_lcd_7b/include/bsp/esp32_p4_wifi6_touch_lcd_7b.h>
 #include "gui.h"
 
+GUI *GUI::ptr=NULL;
+
 extern "C" {
     LV_FONT_DECLARE(open_sans_14b);
     LV_FONT_DECLARE(open_sans_18b);
     LV_FONT_DECLARE(open_sans_24b);
 }
 
-GUI *GUI::ptr=NULL;
+extern "C" {
+    LV_IMG_DECLARE(lightbulb);
+    LV_IMG_DECLARE(arrowup);
+    LV_IMG_DECLARE(arrowdown);
+    LV_IMG_DECLARE(settings);
+    LV_IMG_DECLARE(shelly1pm);
+    LV_IMG_DECLARE(shelly2pm);
+}
+
+#define CFG_OFFSET (GUI::get()->switchWidth/3)*2
 
 //                              DISPLAY DIMMING
 static bool is_dimmed = false;
@@ -66,138 +77,162 @@ void dimDisplay(lv_timer_t *t) {
     }
 }
 
-void GUI::setGapBorderValues(lv_obj_t *obj, int16_t margin, int16_t padAll, int16_t padRow, int16_t padColumn, int16_t border, int16_t shadow) {
-    lv_obj_set_style_margin_all(obj, margin, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(obj, padAll, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(obj, padRow, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(obj, padColumn, LV_PART_MAIN);
-    lv_obj_set_style_border_width(obj, border, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(obj, shadow, LV_PART_MAIN);
+void switchCB(lv_event_t *e)    {
+    lv_obj_t *target=(lv_obj_t *)lv_event_get_target(e);
+    printf("Click on switch 0x%x\n", (int)target);
 }
 
-lv_obj_t *GUI::createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *img, char *label) {
-    lv_obj_t *obj=NULL, *cont=NULL, *text=NULL;
-    if (parent==NULL)   parent=lv_screen_active();
-    esp_lv_adapter_lock(-1);
-
-    //                              CONTAINER
-    cont=lv_obj_create(parent);
-    lv_obj_set_pos(cont, xPos, yPos);
-    lv_obj_set_size(cont, GUI::get()->switchWidth, GUI::get()->switchHeight);
-    lv_obj_set_style_bg_opa(cont, 0, LV_PART_MAIN);
-    setGapBorderValues(cont, 0, 0, 0, 0, 2, 0);
-    lv_obj_set_style_pad_gap(cont, 0, LV_PART_MAIN);
-    
-    //                              BUTTON
-    obj=lv_button_create(cont);
-    lv_obj_set_pos(obj, 0, 0);
-    lv_obj_set_size(obj, lv_pct(100), lv_pct(80));
-    lv_obj_set_style_bg_color(obj, defSwitchColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_CHECKED);
-    lv_obj_set_style_radius(obj, 2, LV_PART_MAIN);
-    setGapBorderValues(obj, 0, 0, 0, 0, 0, 0);
-    lv_obj_set_style_pad_gap(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_pad(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN);
-
-    //                              TEXT
-    text=lv_label_create(cont);
-    lv_obj_set_pos(text, 0, lv_pct(85));
-    lv_obj_set_size(text, lv_pct(100), lv_pct(15));
-    if (label)   lv_label_set_text(text, label);
-    lv_obj_set_style_text_font(text, GUI::get()->getFont(FONT_SMALL), LV_PART_MAIN);
-    lv_obj_set_style_text_color(text, labelDefault, LV_PART_MAIN);
-    lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, 0);
-    esp_lv_adapter_unlock();
+lv_obj_t *GUI::createStdFrame(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height)  {
+    lv_obj_t *obj=lv_obj_create(parent);
+    if (obj)   {
+        lv_obj_set_pos(obj, xPos, yPos);
+        lv_obj_set_size(obj, width, height);
+        lv_obj_add_style(obj, &frameStyle, 0);
+    }
     return obj;
 }
 
-
-void testLPCB(lv_event_t *e)   {
-    printf("LONG PRESS\n");
+lv_obj_t *GUI::createStdLabel(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, char *text)  {
+    lv_obj_t *label=lv_label_create(parent);
+    if (label)  {
+        lv_obj_set_pos(label, xPos, yPos);
+        lv_obj_set_size(label, width, height);
+        if (text)   lv_label_set_text(label, text);
+        lv_obj_set_style_text_font(label, GUI::get()->getFont(FONT_SMALL), LV_PART_MAIN);
+        lv_obj_set_style_text_color(label, defLabelColor, LV_PART_MAIN);
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    }
+    return label;
 }
 
-void testPCB(lv_event_t *e)   {
-    printf("CLICKED\n");
+lv_obj_t *GUI::createStdSlider(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, int32_t min, int32_t max, int32_t val)  {
+    lv_obj_t *obj=lv_slider_create(parent);
+    if (obj)    {
+        lv_obj_set_pos(obj, xPos, yPos);
+        lv_obj_set_size(obj, width, height);
+        lv_slider_set_range(obj, min, max);
+        lv_slider_set_value(obj, val, LV_ANIM_OFF);
+        lv_obj_add_style(obj, &sliderStyle, 0);
+        lv_obj_add_style(obj, &defKnobStyle, LV_PART_KNOB);
+        lv_obj_add_style(obj, &selKnobStyle, LV_PART_KNOB|LV_STATE_PRESSED);
+        lv_obj_add_style(obj, &indicatorStyle, LV_PART_INDICATOR);
+    }
+    return obj;
+}
+
+lv_obj_t *GUI::createStdImgButton(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, const lv_img_dsc_t *img)  {
+    lv_obj_t *obj=lv_button_create(parent);
+    if (obj)    {
+        lv_obj_set_pos(obj, xPos, yPos);
+        lv_obj_set_size(obj, width, height);
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_SCROLL_CHAIN);
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
+        lv_obj_remove_flag(obj, LV_OBJ_FLAG_PRESS_LOCK);
+        lv_obj_add_style(obj, &defButtonStyle, LV_STATE_DEFAULT);
+        lv_obj_add_style(obj, &selButtonStyle, LV_STATE_PRESSED);
+        lv_obj_add_style(obj, &selButtonStyle, LV_STATE_CHECKED);
+        lv_obj_add_event_cb(obj, switchCB, LV_EVENT_CLICKED, NULL);
+        if (img)    {
+            lv_obj_t *image=lv_image_create(obj);
+            lv_image_set_src(image, img);
+            lv_obj_align(image, LV_ALIGN_CENTER, 0, 0);
+        }
+    }
+    return obj;
+}
+
+lv_obj_t *GUI::createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt)   {
+    lv_obj_t *obj=NULL, *cont=NULL, *label=NULL;
+    if (parent==NULL)   parent=lv_screen_active();
+    esp_lv_adapter_lock(-1);
+    cont=createStdFrame(parent, xPos, yPos, GUI::get()->switchWidth, GUI::get()->switchHeight);
+    obj=createStdImgButton(cont, 0, 0, CFG_OFFSET, lv_pct(80), &lightbulb);
+    obj=createStdImgButton(cont, CFG_OFFSET, 0, lv_pct(30), lv_pct(80), (const lv_img_dsc_t *)deviceImg);
+    label=createStdLabel(cont, 0, lv_pct(85), lv_pct(100), lv_pct(15), labelTxt);
+    esp_lv_adapter_unlock();
+    return obj;
 }
 
 void GUI::createMainUI() {
     topBar=new TopBar;
     topBar->setup();
+    esp_lv_adapter_lock(-1);
+    lv_obj_t *tabView=lv_tabview_create(lv_screen_active());
+    lv_tabview_set_tab_bar_position(tabView, LV_DIR_BOTTOM);
+    lv_obj_set_pos(tabView, 0, 64);
+    lv_obj_set_size(tabView, lv_pct(100), 600-64);
+    //lv_obj_set_style_radius(tabView, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(tabView, defBGColor, LV_PART_MAIN);
+    //lv_obj_set_style_bg_opa(tabView, LV_OPA_100, LV_PART_MAIN);
+    //lv_obj_set_style_border_width(tabView, 0, LV_PART_MAIN);
+    //lv_obj_set_style_margin_all(tabView, 0, LV_PART_MAIN);
+    //lv_obj_set_style_outline_width(tabView, 0, LV_PART_MAIN);
+    //lv_obj_set_style_pad_all(tabView, 0, LV_PART_MAIN);
+    //lv_obj_set_style_pad_gap(tabView, 0, LV_PART_MAIN);
+    
+    lv_obj_t *tab1, *tab2, *tab3, *tab4;
+    tab1=lv_tabview_add_tab(tabView, "Devices");
+    //lv_obj_set_style_bg_color(tab1, defBGColor, LV_PART_MAIN);
+    //lv_obj_set_style_bg_opa(tab1, LV_OPA_100, LV_PART_MAIN);
+    //lv_obj_set_style_border_width(tab1, 0, LV_PART_MAIN);
+    //lv_obj_set_style_margin_all(tab1, 0, LV_PART_MAIN);
+    //lv_obj_set_style_outline_width(tab1, 0, LV_PART_MAIN);
+    //lv_obj_set_style_pad_all(tab1, 0, LV_PART_MAIN);
+    //lv_obj_set_style_pad_gap(tab1, 0, LV_PART_MAIN);
+    tab2=lv_tabview_add_tab(tabView, "Rooms");
+    tab3=lv_tabview_add_tab(tabView, "Settings");
+    tab4=lv_tabview_add_tab(tabView, "Shelly");
+    tab4=lv_tabview_add_tab(tabView, "Alarm");
+    tab4=lv_tabview_add_tab(tabView, "Configuration");
 
-    mainPage=lv_obj_create(lv_screen_active());
+    lv_obj_t *tabBar=lv_tabview_get_tab_bar(tabView);
+    uint32_t tab_count = lv_tabview_get_tab_count(tabView);
+    for(uint32_t i=0; i<tab_count; i++) {
+        lv_obj_t * button=lv_obj_get_child(tabBar, i);
+        lv_obj_set_style_text_font(button, getFont(FONT_MEDIUM), 0);
+        lv_obj_set_style_bg_color(button, defBGColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+        /* Stato attivo (tab selezionata) */
+        lv_obj_set_style_bg_color(button, defFGColor, LV_PART_MAIN | LV_STATE_CHECKED);
+        lv_obj_set_style_text_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_CHECKED);
+        
+        /* Indicatore inferiore sulla tab attiva */
+        lv_obj_set_style_border_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_CHECKED);
+        lv_obj_set_style_border_width(button, 3, LV_PART_MAIN | LV_STATE_CHECKED);
+        lv_obj_set_style_border_side(button, LV_BORDER_SIDE_TOP, LV_PART_MAIN | LV_STATE_CHECKED);
+    }
+    mainPage=tab1;
+
+    lv_obj_update_layout(tabView);
+    lv_obj_invalidate(lv_tabview_get_tab_bar(tabView));
+    esp_lv_adapter_unlock();
+    
+
+    /*lv_obj_create(lv_screen_active());
     lv_obj_set_pos(mainPage, 0, 50);
     lv_obj_set_size(mainPage, lv_pct(100), 600-50);
     lv_obj_set_style_radius(mainPage, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(mainPage, backgroundColor, LV_PART_MAIN);
-    lv_obj_set_style_border_width(mainPage, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(mainPage, defBGColor, LV_PART_MAIN);
+    lv_obj_set_style_border_width(mainPage, 0, LV_PART_MAIN);*/
 }
 
-lv_obj_t *GUI::createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *img1, lv_image_dsc_t *img2, char *label)    {
-    lv_obj_t *obj=NULL, *cont=NULL, *hcont=NULL, *text=NULL;
+lv_obj_t *GUI::createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg,  char *labelTxt)    {
+    lv_obj_t *obj=NULL, *cont=NULL, *label=NULL, *valText=NULL;
+    lv_subject_t *subject=(lv_subject_t *)lv_malloc(sizeof(lv_subject_t));
     if (parent==NULL)   parent=lv_screen_active();
     esp_lv_adapter_lock(-1);
-
-    cont=lv_obj_create(parent);
-    lv_obj_set_pos(cont, xPos, yPos);
-    lv_obj_set_size(cont, GUI::get()->switchWidth, GUI::get()->switchHeight);
-    lv_obj_set_style_bg_opa(cont, 0, LV_PART_MAIN);
-    setGapBorderValues(cont, 0, 0, 0, 0, 2, 0);
-    lv_obj_set_style_pad_gap(cont, 0, LV_PART_MAIN);
-
-    obj=lv_button_create(cont);
-    lv_obj_set_pos(obj, 0, 0);
-    lv_obj_set_size(obj, lv_pct(50), lv_pct(60));
-    lv_obj_set_style_bg_color(obj, defSwitchColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_CHECKED);
-    setGapBorderValues(obj, 0, 0, 0, 0, 0, 0);
-    lv_obj_set_style_pad_gap(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_pad(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(obj, 2, LV_PART_MAIN);
-    lv_obj_add_event_cb(obj, testLPCB, LV_EVENT_LONG_PRESSED, NULL);
-    lv_obj_add_event_cb(obj, testPCB, LV_EVENT_CLICKED, NULL);
-
-    obj=lv_button_create(cont);
-    lv_obj_set_pos(obj, lv_pct(50), 0);
-    lv_obj_set_size(obj, lv_pct(50), lv_pct(60));
-    lv_obj_set_style_bg_color(obj, defSwitchColor, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(obj, selSwitchColor, LV_PART_MAIN|LV_STATE_CHECKED);
-    setGapBorderValues(obj, 0, 0, 0, 0, 0, 0);
-    lv_obj_set_style_pad_gap(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_pad(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(obj, 2, LV_PART_MAIN);
-    lv_obj_add_event_cb(obj, testLPCB, LV_EVENT_LONG_PRESSED, NULL);
-    lv_obj_add_event_cb(obj, testPCB, LV_EVENT_CLICKED, NULL);
-
-    obj=lv_slider_create(cont);
-    lv_obj_set_pos(obj, lv_pct(10), lv_pct(65));
-    lv_obj_set_size(obj, lv_pct(80), lv_pct(10));
-    lv_obj_set_style_bg_color(obj, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(obj, knobDefault, LV_PART_KNOB);
-    lv_obj_set_style_bg_color(obj, knobPressed, LV_PART_KNOB|LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(obj, knobPressed, LV_PART_KNOB|LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(obj, knobIndicator, LV_PART_INDICATOR);
-    setGapBorderValues(obj, 0, 0, 0, 0, 0, 0);
-    lv_obj_set_style_pad_gap(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_pad(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(obj, 2, LV_PART_MAIN);
-
-    //                              TEXT
-    text=lv_label_create(cont);
-    lv_obj_set_pos(text, 0, lv_pct(85));
-    lv_obj_set_size(text, lv_pct(100), lv_pct(15));
-    if (label)   lv_label_set_text(text, label);
-    //lv_obj_center(text);
-    lv_obj_set_style_text_font(text, GUI::get()->getFont(FONT_SMALL), LV_PART_MAIN);
-    lv_obj_set_style_text_color(text, labelDefault, LV_PART_MAIN);
-    lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, 0);
-
+    cont=createStdFrame(parent, xPos, yPos, GUI::get()->switchWidth, GUI::get()->switchHeight);
+    obj=createStdImgButton(cont, 0, 0, lv_pct(35), lv_pct(60), &arrowup);
+    obj=createStdImgButton(cont, lv_pct(35), 0, lv_pct(35), lv_pct(60), &arrowdown);
+    obj=createStdImgButton(cont, CFG_OFFSET, 0, lv_pct(30), lv_pct(60), (const lv_img_dsc_t *)deviceImg);
+    obj=createStdSlider(cont, lv_pct(10), lv_pct(65), lv_pct(80), lv_pct(10), 0, 100, 50);
+    label=createStdLabel(cont, 0, lv_pct(85), lv_pct(85), lv_pct(15), labelTxt);
+    valText=createStdLabel(cont, lv_pct(85), lv_pct(85), lv_pct(15), lv_pct(15), "--");
+    lv_subject_init_int(subject, 50);
+    lv_slider_bind_value(obj, subject);
+    lv_label_bind_text(valText, subject, "%d");
     esp_lv_adapter_unlock();
     return obj;
 }
@@ -230,33 +265,92 @@ void GUI::setupGUI()    {
     bsp_display_backlight_on();
     bsp_display_brightness_set(100);
     lv_timer_create(dimDisplay, 10, NULL);
+    lv_indev_set_scroll_limit(lv_indev_get_act(), 2);
+    lv_indev_set_gesture_min_distance(lv_indev_get_act(), 25);
     esp_lv_adapter_lock(-1);
 
-    lv_style_init(&switchStyle);
-    lv_style_init(&barStyle);
-    lv_style_init(&defButtonStyle);
-    lv_style_init(&selButtonStyle);
-
-    lv_style_set_bg_color(&defButtonStyle, defSwitchColor);
-    lv_style_set_bg_color(&selButtonStyle, selSwitchColor);
-
-    mainColor=LV_PALETTE_BLUE_GREY;
-    mainSelectedColor=LV_PALETTE_RED;
-    backgroundColor=lv_palette_darken(mainColor, 2);
-    defSwitchColor=lv_palette_main(mainColor);
-    selSwitchColor=lv_palette_lighten(mainSelectedColor, 2);
-    knobDefault=lv_palette_lighten(mainColor, 1);
-    knobPressed=lv_palette_lighten(mainColor, 2);
-    knobIndicator=lv_palette_lighten(mainSelectedColor, 2);
-    labelDefault=lv_color_darken(lv_color_white(), 1);
-    barColor=lv_palette_lighten(mainColor, 2);
+    defPaletteColor=LV_PALETTE_BLUE_GREY;
+    selPaletteColor=LV_PALETTE_RED;
+    defBGColor=lv_palette_darken(defPaletteColor, 2);
+    defFGColor=lv_palette_darken(defPaletteColor, 4);
+    defSwitchColor=lv_palette_main(defPaletteColor);
+    selSwitchColor=lv_palette_lighten(selPaletteColor, 2);
+    defKnobColor=lv_palette_lighten(defPaletteColor, 1);
+    selKnobColor=lv_palette_lighten(defPaletteColor, 2);
+    defIndicatorColor=lv_palette_lighten(selPaletteColor, 2);
+    defLabelColor=lv_color_darken(lv_color_white(), 1);
+    defBarColor=lv_palette_lighten(defPaletteColor, 1);
     switchWidth=DEF_SWITCH_WIDTH;
     switchHeight=DEF_SWITCH_HEIGHT;
     smallFont=&open_sans_14b;
     mediumFont=&open_sans_18b;
     bigFont=&open_sans_24b;
 
-    lv_obj_set_style_bg_color(lv_screen_active(), backgroundColor, 0);
+    deviceImages[SHELLY1PM]=(lv_img_dsc_t *)&shelly1pm;
+    deviceImages[SHELLY2PM]=(lv_img_dsc_t *)&shelly2pm;
+    
+    lv_style_init(&switchStyle);
+
+    lv_style_init(&barStyle);
+    lv_style_set_margin_all(&barStyle, 0);
+    lv_style_set_pad_all(&barStyle, 0);
+    lv_style_set_pad_row(&barStyle, 0);
+    lv_style_set_pad_column(&barStyle, 0);
+    lv_style_set_border_width(&barStyle, 0);
+    lv_style_set_shadow_width(&barStyle, 0);
+    lv_style_set_bg_opa(&barStyle, LV_OPA_100);
+    lv_style_set_bg_color(&barStyle, defBarColor);
+    lv_style_set_pad_gap(&barStyle, 0);
+
+    lv_style_init(&frameStyle);
+    lv_style_set_margin_all(&frameStyle, 0);
+    lv_style_set_pad_all(&frameStyle, 0);
+    lv_style_set_pad_row(&frameStyle, 0);
+    lv_style_set_pad_column(&frameStyle, 0);
+    lv_style_set_border_width(&frameStyle, 2);
+    lv_style_set_shadow_width(&frameStyle, 0);
+    lv_style_set_bg_opa(&frameStyle, 0);
+    lv_style_set_pad_gap(&frameStyle, 0);
+
+    lv_style_init(&sliderStyle);
+    lv_style_set_bg_color(&sliderStyle, lv_color_white());
+    lv_style_set_margin_all(&sliderStyle, 0);
+    lv_style_set_pad_all(&sliderStyle, 0);
+    lv_style_set_pad_row(&sliderStyle, 0);
+    lv_style_set_pad_column(&sliderStyle, 0);
+    lv_style_set_border_width(&sliderStyle, 0);
+    lv_style_set_shadow_width(&sliderStyle, 0);
+    lv_style_set_bg_opa(&sliderStyle, 0);
+    lv_style_set_pad_gap(&sliderStyle, 0);
+    lv_style_set_outline_pad(&sliderStyle, 0);
+    lv_style_set_outline_width(&sliderStyle, 0);
+    lv_style_set_radius(&sliderStyle, 0);
+
+    lv_style_init(&defKnobStyle);
+    lv_style_set_bg_color(&defKnobStyle, defKnobColor);
+    lv_style_set_radius(&defKnobStyle, 2);
+
+    lv_style_init(&selKnobStyle);
+    lv_style_set_bg_color(&selKnobStyle, selKnobColor);
+
+    lv_style_init(&indicatorStyle);
+    lv_style_set_bg_color(&indicatorStyle, defIndicatorColor);
+    lv_style_set_radius(&indicatorStyle, 2);
+
+    lv_style_init(&defButtonStyle);
+    lv_style_set_bg_color(&defButtonStyle, defSwitchColor);
+    lv_style_set_margin_all(&defButtonStyle, 0);
+    lv_style_set_pad_all(&defButtonStyle, 0);
+    lv_style_set_border_width(&defButtonStyle, 0);
+    lv_style_set_shadow_width(&defButtonStyle, 0);
+    lv_style_set_outline_pad(&defButtonStyle, 0);
+    lv_style_set_outline_width(&defButtonStyle, 0);
+    lv_style_set_radius(&defButtonStyle, 2);
+    
+    lv_style_init(&selButtonStyle);
+    lv_style_set_bg_color(&selButtonStyle, selSwitchColor);
+
+    lv_obj_set_style_bg_color(lv_screen_active(), defBGColor, 0);
     lv_obj_set_style_bg_opa(lv_screen_active(), LV_OPA_COVER, 0);
     esp_lv_adapter_unlock();
 }

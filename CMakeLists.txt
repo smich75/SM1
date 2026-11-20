@@ -3,5 +3,6 @@
 cmake_minimum_required(VERSION 3.22)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-add_compile_definitions(FD_SETSIZE=128)
+add_compile_definitions(FD_SETSIZE=256)
 project(SM1 LANGUAGES C CXX)
+littlefs_create_partition_image(storage data FLASH_IN_PROJECT)

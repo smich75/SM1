@@ -5,16 +5,17 @@
 #include <esp_event.h>
 #include <nvs_flash.h>
 #include <freertos/FreeRTOS.h>
+#include <wifiif.h>
 
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
+typedef struct {
+    char *ssid;
+    char *password;
+} WifiConfig;
+
 
 class Module {
     public:
-    void initWifi();
-    void initWebSockets();
-
-    EventGroupHandle_t wifiEventGroup;
+    void init();
     
     static Module *get()    {
         if (!ptr)   {
@@ -23,8 +24,9 @@ class Module {
         return ptr;
     }
     ~Module()   {};
+
     private:
-    
+    WifiConfig  wifiConfig;
     static Module *ptr;
     Module()    {};
 };

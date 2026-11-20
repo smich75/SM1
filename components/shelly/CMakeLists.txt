@@ -1,6 +1,6 @@
-idf_component_register( SRCS "shelly.cpp" "shelly_generic.cpp"
+idf_component_register( SRCS "shelly.cpp"
                             "shelly1pm.cpp" "shelly2pm.cpp"
-                            "shellyunit.cpp" "shellyswitch.cpp"
-                            "shelly1pm.c" "shelly2pm.c"
+                            "shellyswitch.cpp" "shellydevice.cpp"
+                           
                         INCLUDE_DIRS "include"
-                        PRIV_REQUIRES lvgl__lvgl espressif__esp_lvgl_adapter gui)
+                        REQUIRES lvgl__lvgl espressif__esp_lvgl_adapter esp_http_server espressif__cjson esp_netif gui devices)

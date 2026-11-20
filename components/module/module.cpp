@@ -1,72 +1,88 @@
 #include <cstdio>
 #include "module.h"
+#include "cJSON.h"
+#include "esp_littlefs.h"
+#include <esp_log.h>
+
+static const char *TAG="Module.cpp";
 
 Module  *Module::ptr=NULL;
 
-#define WIFI_SSID "RN11S"
-#define WIFI_PASS "amiga4000"
-
-#define MAX_RETRY 5
-
-static int s_retry_num=0;
-
-static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)  {
-    Module *mod=(Module *)arg;
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < MAX_RETRY) {
-            esp_wifi_connect();
-            s_retry_num++;
-            printf("Reconnecting...\n");
-            //ESP_LOGI(TAG, "Tentativo di riconnessione (%d/%d)...", s_retry_num, MAX_RETRY);
-        } else {
-            xEventGroupSetBits(mod->wifiEventGroup, WIFI_FAIL_BIT);
-        }
-        // Qui puoi aggiornare un'eventuale icona Wi-Fi su LVGL (usando lvgl_port_lock)
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-        //ESP_LOGI(TAG, "Connesso! IP assegnato: " IPSTR, IP2STR(&event->ip_info.ip));
-        s_retry_num=0;
-        xEventGroupSetBits(mod->wifiEventGroup, WIFI_CONNECTED_BIT);
-        // Qui puoi aggiornare l'icona Wi-Fi su LVGL come connessa
+char *readFile(const char *filename)  {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        ESP_LOGI(TAG, "Error opening file: %s", filename);
+        return NULL;
     }
+
+    fseek(file, 0, SEEK_END);
+    long length=ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *buffer=(char*)malloc(length + 1);
+    if (buffer) {
+        fread(buffer, 1, length, file);
+        buffer[length]='\0';
+    }
+    fclose(file);
+    return buffer;
 }
 
-void Module::initWifi() {
+int parseWifiConfig(const char* filename, char** out_ssid, char** out_pass) {
+    char *json_string = readFile(filename);
+    if (!json_string) return -1;
+    cJSON *json = cJSON_Parse(json_string);
+    free(json_string);
+    if (!json) return -1;
+    const cJSON *ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
+    const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
+    if (cJSON_IsString(ssid) && ssid->valuestring) {
+        *out_ssid = strdup(ssid->valuestring); // Alloca e copia automaticamente
+    }
+    if (cJSON_IsString(password) && password->valuestring) {
+        *out_pass = strdup(password->valuestring);
+    }
+    cJSON_Delete(json);
+    return 0;
+}
+
+void Module::init() {
+    //                                          NVS FLASH INITIALIZATION
     esp_err_t ret=nvs_flash_init();
-    if (ret==ESP_ERR_NVS_NO_FREE_PAGES || ret==ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if (ret==ESP_ERR_NVS_NO_FREE_PAGES||ret==ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret=nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-    wifiEventGroup=xEventGroupCreate();
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
-    wifi_init_config_t cfg=WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_event_handler,
-                                                        this,
-                                                        NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &wifi_event_handler,
-                                                        this,
-                                                        NULL));
-    wifi_config_t wifi_config={
-        .sta={
-            .ssid=WIFI_SSID,
-            .password=WIFI_PASS,
-            .threshold={
-                .authmode=WIFI_AUTH_WPA2_PSK,
-            }
-        },
+
+    //                                          LITTLEFS INITIALIZATION
+
+    esp_vfs_littlefs_conf_t conf = {
+        .base_path = "/littlefs",
+        .partition_label = "storage", // Deve corrispondere al nome in partitions.csv
+        .format_if_mount_failed = true,
+        .dont_mount = false,
     };
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ret=esp_vfs_littlefs_register(&conf);
+    if (ret!=ESP_OK) {
+        if (ret==ESP_FAIL) {
+            ESP_LOGE(TAG, "Impossibile montare o formattare il filesystem");
+        } else if (ret==ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(TAG, "Partizione LittleFS non trovata");
+        } else {
+            ESP_LOGE(TAG, "Errore inizializzazione LittleFS (%s)", esp_err_to_name(ret));
+        }
+    }
+
+    size_t total = 0, used = 0;
+    ret=esp_littlefs_info(conf.partition_label, &total, &used);
+    if (ret==ESP_OK) {
+        ESP_LOGI(TAG, "Partizione montata: totale %d byte, usati %d byte", total, used);
+    }
+
+    //                                          WIFI INITIALIZATION
+
+    parseWifiConfig("/littlefs/wificonfig.txt", &wifiConfig.ssid, &wifiConfig.password);
+    WifiIF::get()->init(wifiConfig.ssid, wifiConfig.password);
 }

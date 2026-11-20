@@ -385,6 +385,16 @@ dependencies:
     source:
       type: idf
     version: 6.1.0
+  joltwallet/littlefs:
+    component_hash: 01faa388c6305fe77fd6962cda6171e753033458f24f8fae9e9d932e3d817a4c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.22.1
   lvgl/lvgl:
     component_hash: 184e532558c1c45fefed631f3e235423d22582aafb4630f3e8885c35281a49ae
     dependencies: []
@@ -436,7 +446,8 @@ direct_dependencies:
 - espressif/esp_wifi_remote
 - espressif/usb_host_msc
 - idf
+- joltwallet/littlefs
 - waveshare/esp32_p4_wifi6_touch_lcd_7b
-manifest_hash: 1acde86c6f0887d5b74fb5e571ea224bede8a39d1cdbd5c1394d7fb825e7ea71
+manifest_hash: 214a2180b53c70ac94f4726215e7635a4129e0938f279839b4e78f52c7fd343e
 target: esp32p4
 version: 3.0.0

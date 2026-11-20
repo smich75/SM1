@@ -3,15 +3,18 @@
 
 #pragma once
 
-#include <shellyunit.h>
+#include <switch.h>
 
-class ShellySwitch : public ShellyUnit {
+class ShellyDevice;
+
+class ShellySwitch : public Switch {
 public:
     ShellySwitch();
+    ShellySwitch(Device *p, int32_t u);
     ~ShellySwitch();
-
-private:
-
+    void setOutput(int32_t val);
+protected:
+    int32_t sockNum;
 };
 
 #endif

@@ -3,16 +3,17 @@
 
 #pragma once
 
-#include <shelly_generic.h>
 #include <shellyswitch.h>
+#include <shellydevice.h>
 
-class Shelly2PM : public ShellyGeneric {
+#define S2PMCONF_SWITCH 0
+#define S2PMCONF_COVER  1
+
+class Shelly2PM : public ShellyDevice {
 public:
     Shelly2PM();
     ~Shelly2PM();
 private:
-    ShellySwitch unit0;
-    ShellySwitch unit1;
 };
 
 #endif

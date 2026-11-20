@@ -3,15 +3,23 @@
 
 
 #include <vector>
-#include <shelly_generic.h>
+#include <devices.h>
 #include <shelly1pm.h>
 #include <shelly2pm.h>
+#include <esp_http_server.h>
+#include <cJSON.h>
+#include <esp_log.h>
+
+#define SHELLY_MAX_CLIENT 32
 
 class Shelly  {
     public:
     Shelly() {};
     ~Shelly() {};
-    std::vector<ShellyGeneric> devices;
+    void setup();
+    std::vector<Device> devices;
+
+    private:
 };
 
 #endif

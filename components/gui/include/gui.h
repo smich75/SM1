@@ -15,13 +15,21 @@ enum FONT_SIZE {FONT_SMALL, FONT_MEDIUM, FONT_BIG};
 #define DEF_SWITCH_WIDTH 192
 #define DEF_SWITCH_HEIGHT 128
 
+enum DEVICEIMAGES   {SHELLY1PM, SHELLY2PM};
+
 class GUI   {
     public:
-    lv_obj_t *createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *img, char *label);
-    lv_obj_t *createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *img1, lv_image_dsc_t *img2, char *label);
+    lv_obj_t *createStdFrame(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height);
+    lv_obj_t *createStdLabel(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, char *text);
+    lv_obj_t *createStdSlider(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, int32_t min, int32_t max, int32_t val);
+    lv_obj_t *createStdImgButton(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, const lv_img_dsc_t *img);
+    lv_obj_t *createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
+    lv_obj_t *createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
+    lv_img_dsc_t *getDeviceImage(int32_t deviceID)  {
+        return deviceImages[deviceID];
+    }
     const lv_font_t *getFont(int size);
-    lv_palette_t getMainColor() {   return mainColor;   }
-    void setGapBorderValues(lv_obj_t *obj, int16_t margin, int16_t padAll, int16_t padRow, int16_t padColumn, int16_t border, int16_t shadow);
+    lv_palette_t getMainColor() {   return defPaletteColor;   }
     void createMainUI();
     void setupGUI();
     lv_obj_t *getMainPage() {   return mainPage;    }
@@ -35,19 +43,22 @@ class GUI   {
 
     uint16_t    switchWidth, switchHeight;
 
-    lv_palette_t mainColor, mainSelectedColor;
-    lv_color_t backgroundColor;
-    lv_color_t barColor;
+    lv_palette_t defPaletteColor, selPaletteColor;
+    lv_color_t defBGColor, defFGColor;
+    lv_color_t defBarColor;
     lv_color_t selSwitchColor, defSwitchColor;
-    lv_color_t knobPressed, knobDefault, knobIndicator;
-    lv_color_t labelDefault;
+    lv_color_t selKnobColor, defKnobColor, defIndicatorColor;
+    lv_color_t defLabelColor;
 
     TopBar  *topBar;
 
+    lv_style_t  frameStyle;
     lv_style_t  switchStyle;
+    lv_style_t  sliderStyle;
+    lv_style_t  indicatorStyle;
+    lv_style_t  defKnobStyle, selKnobStyle;
     lv_style_t  barStyle;
-    lv_style_t  defButtonStyle;
-    lv_style_t  selButtonStyle;
+    lv_style_t  defButtonStyle, selButtonStyle;
     
     private:
     GUI();
@@ -59,7 +70,8 @@ class GUI   {
     const lv_font_t *smallFont;
     const lv_font_t *mediumFont;
     const lv_font_t *bigFont;
-    
+
+    lv_img_dsc_t    *deviceImages[64];   
     
 };
 

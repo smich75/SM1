@@ -1,0 +1,4 @@
+{
+    "ssid": "RN11S",
+    "password": "amiga4000"
+}
