@@ -6,9 +6,12 @@
 
 static const char *TAG="Module.cpp";
 
+static const char *mdns_hostname="CONTROL MODULE";
+static const char *mdns_instance_name="Shelly Scanner";
+
 Module  *Module::ptr=NULL;
 
-char *readFile(const char *filename)  {
+char *load_file(const char *filename)  {
     FILE *file = fopen(filename, "rb");
     if (!file) {
         ESP_LOGI(TAG, "Error opening file: %s", filename);
@@ -28,25 +31,9 @@ char *readFile(const char *filename)  {
     return buffer;
 }
 
-int parseWifiConfig(const char* filename, char** out_ssid, char** out_pass) {
-    char *json_string = readFile(filename);
-    if (!json_string) return -1;
-    cJSON *json = cJSON_Parse(json_string);
-    free(json_string);
-    if (!json) return -1;
-    const cJSON *ssid = cJSON_GetObjectItemCaseSensitive(json, "ssid");
-    const cJSON *password = cJSON_GetObjectItemCaseSensitive(json, "password");
-    if (cJSON_IsString(ssid) && ssid->valuestring) {
-        *out_ssid = strdup(ssid->valuestring); // Alloca e copia automaticamente
-    }
-    if (cJSON_IsString(password) && password->valuestring) {
-        *out_pass = strdup(password->valuestring);
-    }
-    cJSON_Delete(json);
-    return 0;
-}
-
 void Module::init() {
+    mdns_results=NULL;
+
     //                                          NVS FLASH INITIALIZATION
     esp_err_t ret=nvs_flash_init();
     if (ret==ESP_ERR_NVS_NO_FREE_PAGES||ret==ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -83,6 +70,27 @@ void Module::init() {
 
     //                                          WIFI INITIALIZATION
 
-    parseWifiConfig("/littlefs/wificonfig.txt", &wifiConfig.ssid, &wifiConfig.password);
-    WifiIF::get()->init(wifiConfig.ssid, wifiConfig.password);
+    WifiIF::get()->configure(load_file(WIFI_CONFIG_FILE));
+
+    init_mdns_service();
+}
+
+void Module::init_mdns_service()    {
+    ESP_ERROR_CHECK(mdns_init());
+    ESP_ERROR_CHECK(mdns_hostname_set(mdns_hostname));
+    ESP_ERROR_CHECK(mdns_instance_name_set(mdns_instance_name));
+}
+
+mdns_result_t *Module::findDevices(char *service, char *proto, int32_t timeout_ms)  {
+    esp_err_t err = mdns_query_ptr(service, proto, timeout_ms, 20, &mdns_results);
+    if (err!=ESP_OK) {
+        ESP_LOGE(TAG, "Errore durante la query mDNS: %s", esp_err_to_name(err));
+        return NULL;
+    }
+
+    if (mdns_results==NULL) {
+        ESP_LOGW(TAG, "Nessun servizio trovato.");
+        return NULL;
+    }
+    return mdns_results;
 }

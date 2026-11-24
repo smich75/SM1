@@ -98,7 +98,7 @@ lv_obj_t *GUI::createStdLabel(lv_obj_t *parent, int32_t xPos, int32_t yPos, int3
         lv_obj_set_pos(label, xPos, yPos);
         lv_obj_set_size(label, width, height);
         if (text)   lv_label_set_text(label, text);
-        lv_obj_set_style_text_font(label, GUI::get()->getFont(FONT_SMALL), LV_PART_MAIN);
+        lv_obj_set_style_text_font(label, GUI::get()->get_font(FONT_SMALL), LV_PART_MAIN);
         lv_obj_set_style_text_color(label, defLabelColor, LV_PART_MAIN);
         lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     }
@@ -141,7 +141,7 @@ lv_obj_t *GUI::createStdImgButton(lv_obj_t *parent, int32_t xPos, int32_t yPos, 
     return obj;
 }
 
-lv_obj_t *GUI::createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt)   {
+lv_obj_t *GUI::create_switch_ui(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt)   {
     lv_obj_t *obj=NULL, *cont=NULL, *label=NULL;
     if (parent==NULL)   parent=lv_screen_active();
     esp_lv_adapter_lock(-1);
@@ -153,7 +153,7 @@ lv_obj_t *GUI::createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_i
     return obj;
 }
 
-void GUI::createMainUI() {
+void GUI::create_main_ui() {
     topBar=new TopBar;
     topBar->setup();
     esp_lv_adapter_lock(-1);
@@ -180,6 +180,12 @@ void GUI::createMainUI() {
     //lv_obj_set_style_pad_all(tab1, 0, LV_PART_MAIN);
     //lv_obj_set_style_pad_gap(tab1, 0, LV_PART_MAIN);
     tab2=lv_tabview_add_tab(tabView, "Rooms");
+    lv_obj_t *lv0=create_listview(tab2, 10, 10, 600, 400);
+    add_device_item(lv0, "Shelly 1PM", get_device_image(SHELLY1PM), 0);
+    add_device_item(lv0, "Shelly 2PM", get_device_image(SHELLY2PM), 1);
+    add_device_item(lv0, "Shelly 2PM", get_device_image(SHELLY2PM), 2);
+    add_device_item(lv0, "Shelly 2PM", get_device_image(SHELLY2PM), 3);
+    add_device_item(lv0, "Shelly 1PM", get_device_image(SHELLY1PM), 4);
     tab3=lv_tabview_add_tab(tabView, "Settings");
     tab4=lv_tabview_add_tab(tabView, "Shelly");
     tab4=lv_tabview_add_tab(tabView, "Alarm");
@@ -189,17 +195,17 @@ void GUI::createMainUI() {
     uint32_t tab_count = lv_tabview_get_tab_count(tabView);
     for(uint32_t i=0; i<tab_count; i++) {
         lv_obj_t * button=lv_obj_get_child(tabBar, i);
-        lv_obj_set_style_text_font(button, getFont(FONT_MEDIUM), 0);
+        lv_obj_set_style_text_font(button, get_font(FONT_MEDIUM), 0);
         lv_obj_set_style_bg_color(button, defBGColor, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_bg_opa(button, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_DEFAULT);
 
         /* Stato attivo (tab selezionata) */
         lv_obj_set_style_bg_color(button, defFGColor, LV_PART_MAIN | LV_STATE_CHECKED);
-        lv_obj_set_style_text_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_CHECKED);
+        lv_obj_set_style_text_color(button, defBGColor, LV_PART_MAIN | LV_STATE_CHECKED);
         
         /* Indicatore inferiore sulla tab attiva */
-        lv_obj_set_style_border_color(button, defLabelColor, LV_PART_MAIN | LV_STATE_CHECKED);
+        lv_obj_set_style_border_color(button, selSwitchColor, LV_PART_MAIN | LV_STATE_CHECKED);
         lv_obj_set_style_border_width(button, 3, LV_PART_MAIN | LV_STATE_CHECKED);
         lv_obj_set_style_border_side(button, LV_BORDER_SIDE_TOP, LV_PART_MAIN | LV_STATE_CHECKED);
     }
@@ -208,17 +214,9 @@ void GUI::createMainUI() {
     lv_obj_update_layout(tabView);
     lv_obj_invalidate(lv_tabview_get_tab_bar(tabView));
     esp_lv_adapter_unlock();
-    
-
-    /*lv_obj_create(lv_screen_active());
-    lv_obj_set_pos(mainPage, 0, 50);
-    lv_obj_set_size(mainPage, lv_pct(100), 600-50);
-    lv_obj_set_style_radius(mainPage, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(mainPage, defBGColor, LV_PART_MAIN);
-    lv_obj_set_style_border_width(mainPage, 0, LV_PART_MAIN);*/
 }
 
-lv_obj_t *GUI::createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg,  char *labelTxt)    {
+lv_obj_t *GUI::create_double_switch_ui(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg,  char *labelTxt)    {
     lv_obj_t *obj=NULL, *cont=NULL, *label=NULL, *valText=NULL;
     lv_subject_t *subject=(lv_subject_t *)lv_malloc(sizeof(lv_subject_t));
     if (parent==NULL)   parent=lv_screen_active();
@@ -237,7 +235,76 @@ lv_obj_t *GUI::createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos
     return obj;
 }
 
-const lv_font_t *GUI::getFont(int size) {
+lv_obj_t *GUI::create_listview(lv_obj_t *parent, int16_t xPos, int16_t yPos, int16_t xSize, int16_t ySize)  {
+    lv_obj_t *list=lv_obj_create(parent);
+    if (list)   {
+        lv_obj_set_pos(list, xPos, yPos);
+        lv_obj_set_size(list, xSize, ySize);
+        //lv_obj_center(list);
+        lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_all(list, 0, 0);
+        lv_obj_set_style_pad_row(list, 0, 0);
+        lv_obj_set_style_radius(list, 6, 0);
+        lv_obj_set_style_clip_corner(list, true, 0);
+    }
+    return list;
+}
+
+static lv_obj_t *selected_row=NULL;
+
+static void row_event_cb(lv_event_t *e) {
+    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
+        lv_obj_t *clicked_row =(lv_obj_t *)lv_event_get_target(e);
+
+        // Deseleziona la riga precedente, se esiste
+        if(selected_row!=NULL&&selected_row!=clicked_row) {
+            lv_obj_clear_state(selected_row, LV_STATE_CHECKED);
+        }
+
+        // Imposta la nuova riga come selezionata
+        lv_obj_add_state(clicked_row, LV_STATE_CHECKED);
+        selected_row = clicked_row;
+
+        intptr_t index = (intptr_t)lv_event_get_user_data(e);
+        LV_LOG_USER("Riga selezionata: %d", (int)index);
+    }
+}
+
+lv_obj_t *GUI::add_device_item(lv_obj_t *parent, char *text, lv_img_dsc_t *img_dsc, int32_t index)   {
+    lv_obj_t *row= lv_obj_create(parent);
+    lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_set_style_radius(row, 0, 0);
+    lv_obj_set_style_border_width(row, 1, 0);
+    lv_obj_set_style_border_side(row, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_color(row, lv_palette_lighten(LV_PALETTE_GREY, 2), 0);
+    lv_obj_set_style_bg_color(row, lv_color_white(), 0);
+    lv_obj_set_style_pad_ver(row, 12, 0);
+    lv_obj_set_style_pad_hor(row, 10, 0);
+    lv_obj_set_style_pad_column(row, 12, 0);
+
+    lv_obj_set_style_bg_color(row, lv_palette_lighten(LV_PALETTE_BLUE, 4), LV_STATE_PRESSED);
+
+    lv_obj_set_style_bg_color(row, lv_palette_lighten(LV_PALETTE_BLUE, 3), LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(row, lv_palette_darken(LV_PALETTE_BLUE, 3), LV_STATE_CHECKED);
+
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(row, row_event_cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
+
+    lv_obj_t *img = lv_img_create(row);
+    lv_img_set_src(img, img_dsc);
+    
+    lv_obj_t * label = lv_label_create(row);
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_font(label, get_font(FONT_MEDIUM), 0);
+    lv_obj_set_flex_grow(label, 1);
+
+    return row;
+}
+
+const lv_font_t *GUI::get_font(int size) {
     switch (size)   {
         case FONT_SMALL:
             return smallFont;
@@ -250,7 +317,7 @@ const lv_font_t *GUI::getFont(int size) {
     }
 }
 
-void GUI::setupGUI()    {
+void GUI::setup_gui()    {
     bsp_display_cfg_t cfg = {
         .lv_adapter_cfg = ESP_LV_ADAPTER_DEFAULT_CONFIG(),
         .rotation = ESP_LV_ADAPTER_ROTATE_180,

@@ -6,16 +6,13 @@
 #include <nvs_flash.h>
 #include <freertos/FreeRTOS.h>
 #include <wifiif.h>
-
-typedef struct {
-    char *ssid;
-    char *password;
-} WifiConfig;
-
+#include <mdns.h>
 
 class Module {
     public:
     void init();
+    void init_mdns_service();
+    mdns_result_t   *findDevices(char *service, char *proto, int32_t timeout_ms);
     
     static Module *get()    {
         if (!ptr)   {
@@ -26,7 +23,7 @@ class Module {
     ~Module()   {};
 
     private:
-    WifiConfig  wifiConfig;
+    mdns_result_t   *mdns_results;
     static Module *ptr;
     Module()    {};
 };

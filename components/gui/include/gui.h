@@ -23,16 +23,18 @@ class GUI   {
     lv_obj_t *createStdLabel(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, char *text);
     lv_obj_t *createStdSlider(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, int32_t min, int32_t max, int32_t val);
     lv_obj_t *createStdImgButton(lv_obj_t *parent, int32_t xPos, int32_t yPos, int32_t width, int32_t height, const lv_img_dsc_t *img);
-    lv_obj_t *createSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
-    lv_obj_t *createDoubleSwitchUI(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
-    lv_img_dsc_t *getDeviceImage(int32_t deviceID)  {
+    lv_obj_t *create_switch_ui(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
+    lv_obj_t *create_double_switch_ui(lv_obj_t *parent, int16_t xPos, int16_t yPos, lv_image_dsc_t *deviceImg, char *labelTxt);
+    lv_obj_t *create_listview(lv_obj_t *parent, int16_t xPos, int16_t yPos, int16_t xSize, int16_t ySize);
+    lv_obj_t *add_device_item(lv_obj_t *parent, char *text, lv_img_dsc_t *img_dsc, int32_t index);
+    lv_img_dsc_t *get_device_image(int32_t deviceID)  {
         return deviceImages[deviceID];
     }
-    const lv_font_t *getFont(int size);
+    const lv_font_t *get_font(int size);
     lv_palette_t getMainColor() {   return defPaletteColor;   }
-    void createMainUI();
-    void setupGUI();
-    lv_obj_t *getMainPage() {   return mainPage;    }
+    void create_main_ui();
+    void setup_gui();
+    lv_obj_t *get_main_page() {   return mainPage;    }
     ~GUI()  {};
     static GUI *get()   {
         if (ptr==NULL)   {

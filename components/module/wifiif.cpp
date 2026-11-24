@@ -2,36 +2,55 @@
 #include <module.h>
 #include <cstring>
 #include <gui.h>
+#include <cJSON.h>
+#include <esp_log.h>
 
-#define MAX_RETRY 5
+static const char *TAG="wifi.cpp";
+
+#define MAX_RETRY_DELAY_MS 2000
 
 WifiIF *WifiIF::ptr=NULL;
-static int s_retry_num=0;
+static bool is_switching_network=false;
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)  {
     WifiIF  *wifi=WifiIF::get();
     if (event_base==WIFI_EVENT&&event_id==WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
+        //esp_wifi_connect();
     } else if (event_base==WIFI_EVENT&&event_id==WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num<MAX_RETRY) {
-            esp_wifi_connect();
-            s_retry_num++;
-        } else {
-            GUI::get()->topBar->disableWifi();
-            xEventGroupSetBits(wifi->eventGroup, WIFI_FAIL_BIT);
-        }
+        if (is_switching_network)   return;
+        GUI::get()->topBar->disableWifi();
+        xEventGroupSetBits(wifi->event_group, WIFI_FAIL_BIT);
+        xEventGroupClearBits(wifi->event_group, WIFI_CONNECTED_BIT);
     } else if (event_base==IP_EVENT&&event_id==IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event=(ip_event_got_ip_t *)event_data;
-        s_retry_num=0;
         GUI::get()->topBar->enableWifi();
-        xEventGroupSetBits(wifi->eventGroup, WIFI_CONNECTED_BIT);
+        xEventGroupSetBits(wifi->event_group, WIFI_CONNECTED_BIT);
+        xEventGroupClearBits(wifi->event_group, WIFI_FAIL_BIT);
     }
 }
 
-void wifiIFTask(void *arg)  {
-    int32_t event;
+void connect_to_indexed_network()   {
     WifiIF  *wifi=WifiIF::get();
+    wifi_config_t wifi_config={
+        .sta={
+            .threshold={
+                .authmode=WIFI_AUTH_WPA2_PSK,
+            }
+        },
+    };
+    strcpy((char *)wifi_config.sta.ssid, wifi->get_ssid(wifi->wifi_current_network));
+    strcpy((char *)wifi_config.sta.password, wifi->get_password(wifi->wifi_current_network));
+    esp_wifi_disconnect();
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    esp_wifi_connect();
+}
+
+void wifi_fsm(void *arg)  {
+    WifiIF  *wifi=WifiIF::get();
+    EventBits_t events;
+    wifi->wifi_current_network=0;
+    wifi->current_state=WIFI_STATE_INIT;
+    wifi->event_group=xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
@@ -47,41 +66,95 @@ void wifiIFTask(void *arg)  {
                                                         &wifi_event_handler,
                                                         NULL,
                                                         NULL));
-    wifi_config_t wifi_config={
-        .sta={
-            .threshold={
-                .authmode=WIFI_AUTH_WPA2_PSK,
-            }
-        },
-    };
-    strcpy((char *)wifi_config.sta.ssid, wifi->getSSID());
-    strcpy((char *)wifi_config.sta.password, wifi->getPWD());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
     while (1)   {
-        event=xEventGroupWaitBits(wifi->eventGroup, WIFI_CONNECTED_BIT|WIFI_FAIL_BIT, pdTRUE, pdFALSE, pdMS_TO_TICKS(10));
+        int32_t retry_delay_ms=4000;
+        switch (wifi->current_state)    {
+            case WIFI_STATE_INIT:
+                connect_to_indexed_network();
+                wifi->current_state=WIFI_STATE_CONNECTING;
+                break;
+
+            case WIFI_STATE_CONNECTING:
+                ESP_LOGW(TAG, "trying %d - %d - %s", wifi->wifi_current_network, wifi->wifi_total_networks, wifi->get_ssid(wifi->wifi_current_network));
+                events=xEventGroupWaitBits(wifi->event_group, WIFI_CONNECTED_BIT|WIFI_FAIL_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(15000));
+                ESP_LOGI(TAG, "Connecting :%0x", (uint32_t)events);
+                if (events&WIFI_CONNECTED_BIT) {
+                    retry_delay_ms=1000;
+                    wifi->current_state=WIFI_STATE_CONNECTED;
+                } else {
+                    wifi->current_state=WIFI_STATE_DISCONNECTED;
+                }
+                break;
+
+            case WIFI_STATE_CONNECTED:
+                events=xEventGroupWaitBits(wifi->event_group, WIFI_FAIL_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+                ESP_LOGI(TAG, "Connected :%0x", (uint32_t)events);
+                if (events&WIFI_FAIL_BIT) {
+                    wifi->current_state=WIFI_STATE_DISCONNECTED;
+                }   else    {
+                   
+                }
+                break;
+
+            case WIFI_STATE_DISCONNECTED:
+                ESP_LOGW(TAG, "Stato: DISCONNECTED. Riconnessione tra %lu ms...", retry_delay_ms);
+                is_switching_network=true;
+                esp_wifi_disconnect();
+                vTaskDelay(pdMS_TO_TICKS(100));
+                is_switching_network=false;
+                xEventGroupClearBits(wifi->event_group, WIFI_FAIL_BIT|WIFI_CONNECTED_BIT);
+                wifi->wifi_current_network=(wifi->wifi_current_network+1)%wifi->wifi_total_networks;
+                connect_to_indexed_network();
+                wifi->current_state=WIFI_STATE_CONNECTING;
+                break;
+
+            case WIFI_STATE_ERROR:
+                ESP_LOGE(TAG, "Stato: ERROR. Controllare wificonfig.txt. Task bloccato.");
+                vTaskDelay(pdMS_TO_TICKS(10000));
+                break;
+
+        }
     }
 }
 
 WifiIF::WifiIF() {
 }
 
+int32_t WifiIF::configure(char *configuration)  {
+    int32_t ret_val=0;
+    wifi_total_networks=0;
+    if (configuration)  {
+        cJSON *root=cJSON_Parse(configuration);
+        free(configuration);
+        if (root!=NULL) {
+            cJSON *network_array=cJSON_GetObjectItemCaseSensitive(root, "nets");
+            if (cJSON_IsArray(network_array))   {
+                cJSON *net=NULL;
+                int index=0;
+                cJSON_ArrayForEach(net, network_array) {
+                    cJSON *ssid=cJSON_GetObjectItemCaseSensitive(net, "ssid");
+                    cJSON *password=cJSON_GetObjectItemCaseSensitive(net, "password");
 
-
-void WifiIF::init(char *_ssid, char *_pwd)    {
-    strcpy((char *)ssid, _ssid);
-    strcpy((char *)pwd, _pwd);
-    eventGroup=xEventGroupCreate();
-    xTaskCreate(wifiIFTask, "WIFI", 8192, NULL, 1, &wifiTask);
-}
-
-void WifiIF::setSSID(char *_ssid)   {
-    strcpy((char *)ssid, _ssid);
-}
-
-void WifiIF::setPWD(char *_pwd) {
-    strcpy((char *)pwd, _pwd);
+                    if (cJSON_IsString(ssid)&&(ssid->valuestring!=NULL) &&
+                        cJSON_IsString(password)&&(password->valuestring!=NULL)) {
+                        ESP_LOGI(TAG, "Rete %d -> SSID: %s | Password: %s", 
+                        index, ssid->valuestring, password->valuestring);
+                    }
+                    wifi_network_array[index]=new wifi_network_t;
+                    strcpy(wifi_network_array[index]->ssid, ssid->valuestring);
+                    strcpy(wifi_network_array[index]->password, password->valuestring);
+                    wifi_total_networks++;
+                    index++;
+                }
+                xTaskCreate(wifi_fsm, "WIFI", 8192, NULL, 1, &wifi_task);
+                ret_val=1;
+            }
+            cJSON_Delete(root);
+        }
+    }
+    return ret_val;
 }
 
 WifiIF::~WifiIF()   {
