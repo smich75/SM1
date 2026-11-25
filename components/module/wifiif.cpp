@@ -7,7 +7,7 @@
 
 static const char *TAG="wifi.cpp";
 
-#define MAX_RETRY_DELAY_MS 2000
+#define MAX_RETRY_DELAY_MS 20000
 
 WifiIF *WifiIF::ptr=NULL;
 static bool is_switching_network=false;
@@ -19,11 +19,11 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
         //esp_wifi_connect();
     } else if (event_base==WIFI_EVENT&&event_id==WIFI_EVENT_STA_DISCONNECTED) {
         if (is_switching_network)   return;
-        GUI::get()->topBar->disableWifi();
+        GUI::get()->top_bar->disableWifi();
         xEventGroupSetBits(wifi->event_group, WIFI_FAIL_BIT);
         xEventGroupClearBits(wifi->event_group, WIFI_CONNECTED_BIT);
     } else if (event_base==IP_EVENT&&event_id==IP_EVENT_STA_GOT_IP) {
-        GUI::get()->topBar->enableWifi();
+        GUI::get()->top_bar->enableWifi();
         xEventGroupSetBits(wifi->event_group, WIFI_CONNECTED_BIT);
         xEventGroupClearBits(wifi->event_group, WIFI_FAIL_BIT);
     }
@@ -47,12 +47,14 @@ void connect_to_indexed_network()   {
 
 void wifi_fsm(void *arg)  {
     WifiIF  *wifi=WifiIF::get();
+    int32_t retry_delay_ms=1000;
     EventBits_t events;
     wifi->wifi_current_network=0;
     wifi->current_state=WIFI_STATE_INIT;
     wifi->event_group=xEventGroupCreate();
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    Module::get()->init_mdns_service();
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg=WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -69,7 +71,6 @@ void wifi_fsm(void *arg)  {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
     while (1)   {
-        int32_t retry_delay_ms=4000;
         switch (wifi->current_state)    {
             case WIFI_STATE_INIT:
                 connect_to_indexed_network();
@@ -102,10 +103,15 @@ void wifi_fsm(void *arg)  {
                 ESP_LOGW(TAG, "Stato: DISCONNECTED. Riconnessione tra %lu ms...", retry_delay_ms);
                 is_switching_network=true;
                 esp_wifi_disconnect();
-                vTaskDelay(pdMS_TO_TICKS(100));
+                vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
                 is_switching_network=false;
                 xEventGroupClearBits(wifi->event_group, WIFI_FAIL_BIT|WIFI_CONNECTED_BIT);
-                wifi->wifi_current_network=(wifi->wifi_current_network+1)%wifi->wifi_total_networks;
+                wifi->wifi_current_network=wifi->wifi_current_network+1;
+                if (wifi->wifi_current_network==wifi->wifi_total_networks)    {
+                    wifi->wifi_current_network=0;
+                    retry_delay_ms*=2;
+                    if (retry_delay_ms>MAX_RETRY_DELAY_MS)  retry_delay_ms=MAX_RETRY_DELAY_MS;
+                }
                 connect_to_indexed_network();
                 wifi->current_state=WIFI_STATE_CONNECTING;
                 break;

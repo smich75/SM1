@@ -25,7 +25,14 @@
   "idf.port": "COM3",
   "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf",
   "idf.customExtraVars": {
-    "IDF_TARGET": "esp32p4"
+    "IDF_TARGET": "esp32p4",
+    "OPENOCD_USB_ADAPTER_LOCATION": "4-1"
   },
-  "idf.flashType": "JTAG"
+  "idf.flashType": "JTAG",
+  "clangd.path": "C:\\Espressif\\tools\\esp-clangd\\esp-21.1.3_20260408\\esp-clangd\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\Users\\smich\\workspace\\SM1\\SM1\\build"
+  ]
 }

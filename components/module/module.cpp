@@ -70,9 +70,8 @@ void Module::init() {
 
     //                                          WIFI INITIALIZATION
 
+    init_usb_host_msc();
     WifiIF::get()->configure(load_file(WIFI_CONFIG_FILE));
-
-    init_mdns_service();
 }
 
 void Module::init_mdns_service()    {
@@ -81,7 +80,75 @@ void Module::init_mdns_service()    {
     ESP_ERROR_CHECK(mdns_instance_name_set(mdns_instance_name));
 }
 
-mdns_result_t *Module::findDevices(char *service, char *proto, int32_t timeout_ms)  {
+static void msc_event_cb(const msc_host_event_t *event, void *arg)  {
+    Module *module=Module::get();
+    xQueueSend(module->usb_event_queue, event, portMAX_DELAY);
+}
+
+// Task di sistema per la libreria USB Host
+static void usb_lib_task(void *arg) {
+    Module *module=Module::get();
+    module->usb_event_queue=xQueueCreate(5, sizeof(msc_host_event_t));
+
+    const usb_host_config_t host_config = {
+        .skip_phy_setup = false,
+        .intr_flags = ESP_INTR_FLAG_LEVEL1,
+    };
+    ESP_ERROR_CHECK(usb_host_install(&host_config));
+
+    // 2. Installa driver MSC (il suo task interno resta isolato e non blocca mai le letture/scritture)
+    const msc_host_driver_config_t msc_config = {
+        .create_backround_task=true,
+        .task_priority=5,
+        .stack_size=4096,
+        .callback=msc_event_cb,
+    };
+    ESP_ERROR_CHECK(msc_host_install(&msc_config));
+
+    module->msc_device=NULL;
+    module->vfs_handle=NULL;
+
+    while (1) {
+        uint32_t event_flags;
+        usb_host_lib_handle_events(pdMS_TO_TICKS(20), &event_flags);
+        if (event_flags & USB_HOST_LIB_EVENT_FLAGS_NO_CLIENTS) {
+            usb_host_device_free_all();
+        }
+        msc_host_event_t msg;
+        if (xQueueReceive(module->usb_event_queue, &msg, 0) == pdTRUE) {
+            if (msg.event == msc_host_event_t::MSC_DEVICE_CONNECTED) {
+                ESP_LOGI(TAG, "Chiavetta inserita");
+                ESP_ERROR_CHECK(msc_host_install_device(msg.device.address, &module->msc_device));
+
+                const esp_vfs_fat_mount_config_t mount_config = {
+                    .format_if_mount_failed = false,
+                    .max_files = 3,
+                    .allocation_unit_size = 1024,
+                };
+                //ESP_ERROR_CHECK(msc_host_vfs_register(module->msc_device, "/usb", &mount_config, &module->vfs_handle));
+                ESP_LOGI(TAG, "Chiavetta montata su /usb");
+
+            } else if (msg.event == msc_host_event_t::MSC_DEVICE_DISCONNECTED) {
+                ESP_LOGI(TAG, "Chiavetta rimossa");
+                if (module->vfs_handle) {
+                    msc_host_vfs_unregister(module->vfs_handle);
+                    module->vfs_handle = NULL;
+                }
+                if (module->msc_device) {
+                    msc_host_uninstall_device(module->msc_device);
+                    module->msc_device = NULL;
+                }
+            }
+        }
+    }
+}
+
+void Module::init_usb_host_msc()    {
+    device_connected_sem=xSemaphoreCreateBinary();
+    xTaskCreate(usb_lib_task, "usb_lib", 4096, NULL, 2, NULL);
+}
+
+mdns_result_t *Module::find_devices(char *service, char *proto, int32_t timeout_ms)  {
     esp_err_t err = mdns_query_ptr(service, proto, timeout_ms, 20, &mdns_results);
     if (err!=ESP_OK) {
         ESP_LOGE(TAG, "Errore durante la query mDNS: %s", esp_err_to_name(err));
